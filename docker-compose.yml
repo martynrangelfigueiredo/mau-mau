@@ -19,6 +19,15 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  maumau-cli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: maumau-cli-app
+    stdin_open: true
+    tty: true
+    command: ["python3", "-m", "maumau.cli"]
+
   mariadb:
     image: mariadb:11.2-noble
     container_name: maumau-mariadb

@@ -34,103 +34,40 @@ Play it with a windowed desktop GUI (built with [PySide6](https://www.qt.io/qt-f
 
 ## Requirements
 
-* Python ≥ 3.9 (GPL-compatible, open-source)
-* [PySide6](https://pypi.org/project/PySide6/) (LGPLv3, Qt for Python) for the
-  windowed GUI — install with the `gui` extra: `pip install -e ".[gui]"`.
-  Not required for the console version.
+* [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/)
 
 ---
 
-## Installation
+## Execution (Docker Only)
 
-### Run from source
+This project is configured to run exclusively via Docker and Docker Compose.
+
+### 1. Web Application (Recommended)
+
+Start the Web Application and database:
 
 ```bash
-git clone https://github.com/martynrangelfigueiredo/mau-mau.git
-cd mau-mau
-pip install -e ".[gui]"
-mau-mau-gui      # windowed GUI (recommended)
-mau-mau          # or: text-based console version, also: python -m maumau
+docker compose up --build
 ```
 
-### Download Windows binary
+Access the application in your browser at `http://localhost:8000`.
 
-Pre-built Windows binaries are attached to every
-[GitHub Release](https://github.com/martynrangelfigueiredo/mau-mau/releases):
+### 2. Console Version (CLI)
 
-| File | Description |
-|------|-------------|
-| `mau-mau-gui.exe` | Standalone windowed GUI executable (no installer needed) |
-| `mau-mau.exe` | Standalone console/text executable (no installer needed) |
-| `mau-mau-setup.exe` | Full installer — installs both, adds Start Menu shortcuts and uninstaller |
-
----
-
-## Building from Source (Windows)
-
-### Prerequisites
-
-* [Python 3.12](https://www.python.org/downloads/) (GPL-compatible)
-* [PyInstaller](https://pyinstaller.org/) — builds the standalone `.exe`
-* [NSIS 3.x](https://nsis.sourceforge.io/Download) — builds the `.exe`
-  installer (GPL-compatible)
-
-### Steps
-
-```powershell
-# 1. Install PyInstaller and the GUI dependency
-pip install pyinstaller
-pip install -e ".[gui]"
-
-# 2. Build standalone .exe files
-pyinstaller --onefile --name mau-mau --console src/maumau/__main__.py
-pyinstaller --onefile --name mau-mau-gui --windowed --collect-all PySide6 `
-  src/maumau/gui.py
-
-# 3. Build installer  (requires NSIS in PATH)
-makensis installer/mau-mau.nsi
-```
-
-The installer is written to `installer/mau-mau-setup.exe`.
-
-### Automated build (GitHub Actions)
-
-Push a tag to trigger the full build pipeline:
+Run the interactive terminal version inside a container:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+docker compose run --rm maumau-cli
 ```
 
-The workflow (`.github/workflows/build-windows.yml`) will:
-1. Run all tests
-2. Build `mau-mau.exe` with PyInstaller on `windows-latest`
-3. Build `mau-mau-setup.exe` with NSIS
-4. Publish both as a GitHub Release
+### 3. Run Tests via Docker
 
----
-
-## Windows Store
-
-To publish on the **Microsoft Store** you need to repackage the NSIS installer
-as an **MSIX** package using the
-[MSIX Packaging Tool](https://docs.microsoft.com/windows/msix/packaging-tool/tool-overview)
-(free, from Microsoft Store).  Steps:
-
-1. Build `mau-mau-setup.exe` as described above.
-2. Open the **MSIX Packaging Tool** → *Create package from existing installer*.
-3. Point it at `mau-mau-setup.exe` and follow the wizard.
-4. Sign the resulting `.msix` with a code-signing certificate.
-5. Submit via [Partner Center](https://partner.microsoft.com/dashboard).
-
----
-
-## Development
+Run the full pytest suite inside a container:
 
 ```bash
-pip install -e ".[gui]" pytest
-python -m pytest tests/ -v
+docker compose run --rm maumau-web pytest
 ```
+
 
 ---
 
