@@ -33,12 +33,14 @@ from PySide6.QtCore import QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -57,6 +59,15 @@ from .game import (
     WINNING_SCORE,
     is_game_over,
     game_winner,
+)
+from .settings import (
+    ensure_profile,
+    get_profile_history,
+    get_profile_stats,
+    list_profile_names,
+    load_last_profile,
+    record_game_result,
+    record_round_result,
 )
 
 TABLE_COLOR = "#0b6623"
@@ -290,7 +301,46 @@ class SuitDialog(QDialog):
         return dialog.chosen
 
 
+class HistoryDialog(QDialog):
+    """Read-only list of a profile's past rounds and games."""
+
+    def __init__(self, parent: QWidget, profile_name: str) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"History — {profile_name}")
+        self.resize(440, 420)
+
+        layout = QVBoxLayout(self)
+        entries = get_profile_history(profile_name, limit=50)
+
+        if not entries:
+            layout.addWidget(QLabel("No plays recorded yet for this profile."))
+        else:
+            list_widget = QListWidget()
+            for entry in entries:
+                list_widget.addItem(self._format_entry(entry))
+            layout.addWidget(list_widget)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+    @staticmethod
+    def _format_entry(entry: dict) -> str:
+        when = entry.get("timestamp", "")[:19].replace("T", " ")
+        if entry.get("type") == "game":
+            result = "WON the game" if entry["won"] else "lost the game"
+            return f"{when}  —  {result}  (final score: {entry['final_score']})"
+        result = "won" if entry["won"] else "lost"
+        opponents = ", ".join(entry.get("opponents", [])) or "?"
+        return (
+            f"{when}  —  Round {result}, +{entry['points_earned']} pts "
+            f"(total {entry['total_score']}) vs {opponents}"
+        )
+
+
 class SetupScreen(QWidget):
+    NEW_PROFILE = "+ New Player…"
+
     def __init__(self, on_start: Callable[[str, int], None]) -> None:
         super().__init__()
         self._on_start = on_start
@@ -310,14 +360,32 @@ class SetupScreen(QWidget):
         form_widget.setStyleSheet("color: white; font-size: 14px;")
         outer.addWidget(form_widget, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        form.addWidget(QLabel("Your name:"), 0, 0)
-        self.name_edit = QLineEdit("Player")
-        form.addWidget(self.name_edit, 0, 1)
+        form.addWidget(QLabel("Profile:"), 0, 0)
+        self.profile_combo = QComboBox()
+        self.profile_combo.setMinimumWidth(160)
+        self.profile_combo.currentTextChanged.connect(self._on_profile_changed)
+        form.addWidget(self.profile_combo, 0, 1)
 
-        form.addWidget(QLabel("AI opponents (1-3):"), 1, 0)
+        self.history_btn = QPushButton("View History")
+        self.history_btn.setStyleSheet("color: white; text-decoration: underline; border: none;")
+        self.history_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.history_btn.clicked.connect(self._show_history)
+        form.addWidget(self.history_btn, 0, 2)
+
+        self.new_name_label = QLabel("New player name:")
+        form.addWidget(self.new_name_label, 1, 0)
+        self.new_name_edit = QLineEdit()
+        self.new_name_edit.setPlaceholderText("Type a name…")
+        form.addWidget(self.new_name_edit, 1, 1)
+
+        self.stats_label = QLabel()
+        self.stats_label.setStyleSheet("color: #ffe066; font-size: 12px;")
+        form.addWidget(self.stats_label, 2, 0, 1, 2)
+
+        form.addWidget(QLabel("AI opponents (1-3):"), 3, 0)
         self.ai_spin = QSpinBox()
         self.ai_spin.setRange(1, 3)
-        form.addWidget(self.ai_spin, 1, 1)
+        form.addWidget(self.ai_spin, 3, 1)
 
         start_btn = QPushButton("Start Game")
         start_btn.setStyleSheet(
@@ -328,9 +396,56 @@ class SetupScreen(QWidget):
         outer.addWidget(start_btn, alignment=Qt.AlignmentFlag.AlignCenter)
         outer.addStretch()
 
+        self.refresh()
+
+    def refresh(self) -> None:
+        """Reload known profiles; called whenever the setup screen is shown."""
+        last_profile = load_last_profile()
+
+        self.profile_combo.blockSignals(True)
+        self.profile_combo.clear()
+        self.profile_combo.addItems(list_profile_names())
+        self.profile_combo.addItem(self.NEW_PROFILE)
+        self.profile_combo.blockSignals(False)
+
+        if last_profile:
+            self.profile_combo.setCurrentText(last_profile)
+        else:
+            self.profile_combo.setCurrentText(self.NEW_PROFILE)
+        self._on_profile_changed(self.profile_combo.currentText())
+
+    def _on_profile_changed(self, selected: str) -> None:
+        is_new = selected == self.NEW_PROFILE or not selected
+        self.new_name_label.setVisible(is_new)
+        self.new_name_edit.setVisible(is_new)
+        if is_new:
+            self.new_name_edit.clear()
+            self.new_name_edit.setFocus()
+            self.stats_label.setText("A separate history will be created for this player.")
+        else:
+            stats = get_profile_stats(selected)
+            self.stats_label.setText(
+                f"Games played: {stats['games_played']}  |  "
+                f"Wins: {stats['games_won']}  |  Best score: {stats['best_score']}"
+            )
+
     def _start(self) -> None:
-        name = self.name_edit.text().strip() or "Player"
+        selected = self.profile_combo.currentText()
+        if selected == self.NEW_PROFILE or not selected:
+            name = self.new_name_edit.text().strip() or "Player"
+        else:
+            name = selected
+        ensure_profile(name)
         self._on_start(name, self.ai_spin.value())
+
+    def _show_history(self) -> None:
+        name = self.profile_combo.currentText()
+        if not name or name == self.NEW_PROFILE:
+            QMessageBox.warning(self, "Profile Name", "Please select a profile to view its history.")
+            return
+
+        dialog = HistoryDialog(self, name)
+        dialog.exec()
 
 
 class GameScreen(QWidget):
@@ -502,6 +617,7 @@ class MauMauApp:
         self.players = []
         self.state = None
         self.round_number = 0
+        self.setup_screen.refresh()
         self.stack.setCurrentWidget(self.setup_screen)
 
     def start_game(self, name: str, num_ai: int) -> None:
@@ -695,7 +811,24 @@ class MauMauApp:
     def end_round(self) -> None:
         assert self.state is not None
         winner = self.state.round_winner()
+
+        points_earned = 0
+        if winner:
+            points_earned = sum(p.hand_value() for p in self.players if p is not winner)
+
         self.state.tally_round()
+
+        human = next(p for p in self.players if p.is_human)
+        opponents = [p.name for p in self.players if not p.is_human]
+
+        record_round_result(
+            name=human.name,
+            won=human is winner,
+            points_earned=points_earned if human is winner else 0,
+            total_score=human.score,
+            opponents=opponents,
+        )
+
         self.game_screen.render(self.state, self.players, self.round_number)
         self.game_screen.set_controls_enabled(False)
 
@@ -705,6 +838,7 @@ class MauMauApp:
         if is_game_over(self.players):
             champion = game_winner(self.players)
             assert champion is not None
+            record_game_result(human.name, won=champion is human, final_score=human.score)
             QMessageBox.information(
                 self.window, "Game over",
                 f"\U0001F3C6 {champion.name} wins the game with "
