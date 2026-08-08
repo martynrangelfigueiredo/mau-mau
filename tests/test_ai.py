@@ -1,7 +1,26 @@
 """Tests for AI module."""
 from maumau.cards import Card, Rank, Suit, WILD_RANK
 from maumau.game import GameState, Player
-from maumau.ai import ai_choose_action
+from maumau.ai import AI_NAMES, ai_choose_action, get_random_ai_names
+
+
+def test_ai_names_count():
+    assert len(AI_NAMES) == 100
+    for name in AI_NAMES:
+        assert name.startswith("🤖 [")
+        assert "]" in name
+
+
+def test_get_random_ai_names():
+    names = get_random_ai_names(3)
+    assert len(names) == 3
+    assert len(set(names)) == 3
+    for name in names:
+        assert name in AI_NAMES
+
+    # Exclude names
+    names_excluded = get_random_ai_names(3, exclude=[names[0]])
+    assert names[0] not in names_excluded
 
 
 def test_ai_plays_valid_card():

@@ -51,7 +51,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .ai import ai_choose_action
+from .ai import ai_choose_action, get_random_ai_names
 from .cards import Card, Rank, Suit, DRAW_TWO_RANK, WILD_RANK
 from .game import (
     GameState,
@@ -100,6 +100,95 @@ PIP_LAYOUTS: dict[int, list[tuple[float, float]]] = {
 
 def _card_pip_count(rank: Rank) -> Optional[int]:
     return {"7": 7, "8": 8, "9": 9, "10": 10}.get(rank.symbol)
+
+
+def extract_country_code(name: str) -> Optional[str]:
+    """Extract 2-letter country code from name like '🤖 [DE] Lukas'."""
+    if "[" in name and "]" in name:
+        code = name.split("[")[1].split("]")[0].strip().upper()
+        if len(code) == 2 and code.isalpha():
+            return code
+    return None
+
+
+def _draw_country_flag(country_code: str, width: int = 24, height: int = 16) -> QPixmap:
+    """Procedurally draw vector flag graphic for 10 Mau-Mau countries."""
+    pix = QPixmap(width, height)
+    pix.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pix)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    w, h = float(width), float(height)
+    code = country_code.upper()
+
+    if code == "DE":
+        painter.fillRect(QRectF(0, 0, w, h / 3), QColor("#000000"))
+        painter.fillRect(QRectF(0, h / 3, w, h / 3), QColor("#DD0000"))
+        painter.fillRect(QRectF(0, 2 * h / 3, w, h / 3), QColor("#FFCC00"))
+    elif code == "AT":
+        painter.fillRect(QRectF(0, 0, w, h / 3), QColor("#ED2939"))
+        painter.fillRect(QRectF(0, h / 3, w, h / 3), QColor("#FFFFFF"))
+        painter.fillRect(QRectF(0, 2 * h / 3, w, h / 3), QColor("#ED2939"))
+    elif code == "CH":
+        painter.fillRect(QRectF(0, 0, w, h), QColor("#D52B1E"))
+        painter.setBrush(QColor("#FFFFFF"))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(QRectF(w * 0.4, h * 0.2, w * 0.2, h * 0.6))
+        painter.drawRect(QRectF(w * 0.2, h * 0.4, w * 0.6, h * 0.2))
+    elif code == "BR":
+        painter.fillRect(QRectF(0, 0, w, h), QColor("#009B3A"))
+        path = QPainterPath()
+        path.moveTo(w * 0.5, h * 0.15)
+        path.lineTo(w * 0.85, h * 0.5)
+        path.lineTo(w * 0.5, h * 0.85)
+        path.lineTo(w * 0.15, h * 0.5)
+        path.closeSubpath()
+        painter.fillPath(path, QColor("#FEDF00"))
+        painter.setBrush(QColor("#002776"))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(QRectF(w * 0.35, h * 0.3, w * 0.3, h * 0.4))
+    elif code == "NL":
+        painter.fillRect(QRectF(0, 0, w, h / 3), QColor("#AE1C28"))
+        painter.fillRect(QRectF(0, h / 3, w, h / 3), QColor("#FFFFFF"))
+        painter.fillRect(QRectF(0, 2 * h / 3, w, h / 3), QColor("#21468B"))
+    elif code == "PL":
+        painter.fillRect(QRectF(0, 0, w, h / 2), QColor("#FFFFFF"))
+        painter.fillRect(QRectF(0, h / 2, w, h / 2), QColor("#DC143C"))
+    elif code == "CZ":
+        painter.fillRect(QRectF(0, 0, w, h / 2), QColor("#FFFFFF"))
+        painter.fillRect(QRectF(0, h / 2, w, h / 2), QColor("#D7141A"))
+        path = QPainterPath()
+        path.moveTo(0, 0)
+        path.lineTo(w * 0.5, h * 0.5)
+        path.lineTo(0, h)
+        path.closeSubpath()
+        painter.fillPath(path, QColor("#11457E"))
+    elif code == "HU":
+        painter.fillRect(QRectF(0, 0, w, h / 3), QColor("#CD2A3E"))
+        painter.fillRect(QRectF(0, h / 3, w, h / 3), QColor("#FFFFFF"))
+        painter.fillRect(QRectF(0, 2 * h / 3, w, h / 3), QColor("#436F4D"))
+    elif code == "AR":
+        painter.fillRect(QRectF(0, 0, w, h / 3), QColor("#74ACDF"))
+        painter.fillRect(QRectF(0, h / 3, w, h / 3), QColor("#FFFFFF"))
+        painter.fillRect(QRectF(0, 2 * h / 3, w, h / 3), QColor("#74ACDF"))
+        painter.setBrush(QColor("#F6B40E"))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(QRectF(w * 0.4, h * 0.38, w * 0.2, h * 0.24))
+    elif code == "PT":
+        painter.fillRect(QRectF(0, 0, w * 0.4, h), QColor("#046A38"))
+        painter.fillRect(QRectF(w * 0.4, 0, w * 0.6, h), QColor("#DA291C"))
+        painter.setBrush(QColor("#FEDF00"))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(QRectF(w * 0.3, h * 0.3, w * 0.2, h * 0.4))
+    else:
+        painter.fillRect(QRectF(0, 0, w, h), QColor("#888888"))
+
+    painter.setPen(QPen(QColor("#444444"), 1))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawRect(QRectF(0, 0, w - 1, h - 1))
+
+    painter.end()
+    return pix
 
 
 def _draw_card_back(width: int, height: int) -> QPixmap:
@@ -444,15 +533,35 @@ class SetupScreen(QWidget):
 
         self.ai_name_labels: list[QLabel] = []
         self.ai_name_edits: list[QLineEdit] = []
+        self.ai_flag_labels: list[QLabel] = []
+        self.default_ai_names = get_random_ai_names(3)
         for i in range(1, 4):
             lbl = QLabel(f"AI {i} name:")
             edit = QLineEdit()
-            edit.setPlaceholderText(f"CPU-{i}")
+            flag_lbl = QLabel()
+            preset = self.default_ai_names[i - 1]
+            edit.setPlaceholderText(preset)
+            edit.setText(preset)
+            edit.setProperty("_is_preset", True)
+
+            def _update_flag(e=edit, fl=flag_lbl):
+                code = extract_country_code(e.text() or e.placeholderText())
+                if code:
+                    fl.setPixmap(_draw_country_flag(code, 22, 15))
+                else:
+                    fl.setPixmap(QPixmap())
+
+            edit.textEdited.connect(lambda _, e=edit: e.setProperty("_is_preset", False))
+            edit.textChanged.connect(lambda _, u=_update_flag: u())
+
             self.ai_name_labels.append(lbl)
             self.ai_name_edits.append(edit)
+            self.ai_flag_labels.append(flag_lbl)
             row = 3 + i
             form.addWidget(lbl, row, 0)
             form.addWidget(edit, row, 1)
+            form.addWidget(flag_lbl, row, 2)
+            _update_flag()
 
         start_btn = QPushButton("Start Game")
         start_btn.setStyleSheet(
@@ -471,6 +580,7 @@ class SetupScreen(QWidget):
             visible = i < count
             self.ai_name_labels[i].setVisible(visible)
             self.ai_name_edits[i].setVisible(visible)
+            self.ai_flag_labels[i].setVisible(visible)
 
     def refresh(self) -> None:
         """Reload known profiles; called whenever the setup screen is shown."""
@@ -487,6 +597,22 @@ class SetupScreen(QWidget):
         else:
             self.profile_combo.setCurrentText(self.NEW_PROFILE)
         self._on_profile_changed(self.profile_combo.currentText())
+
+        # Generate fresh random AI preset names for unedited fields
+        self.default_ai_names = get_random_ai_names(3)
+        for i in range(3):
+            preset = self.default_ai_names[i]
+            edit = self.ai_name_edits[i]
+            flag_lbl = self.ai_flag_labels[i]
+            edit.setPlaceholderText(preset)
+            if not edit.text() or edit.property("_is_preset"):
+                edit.setText(preset)
+                edit.setProperty("_is_preset", True)
+            code = extract_country_code(edit.text() or preset)
+            if code:
+                flag_lbl.setPixmap(_draw_country_flag(code, 22, 15))
+            else:
+                flag_lbl.setPixmap(QPixmap())
 
     def _on_profile_changed(self, selected: str) -> None:
         is_new = selected == self.NEW_PROFILE or not selected
@@ -511,8 +637,9 @@ class SetupScreen(QWidget):
         count = self.ai_spin.value()
         ai_names: list[str] = []
         for i in range(count):
-            custom = self.ai_name_edits[i].text().strip()
-            ai_names.append(custom or f"CPU-{i + 1}")
+            text = self.ai_name_edits[i].text().strip()
+            placeholder = self.ai_name_edits[i].placeholderText().strip()
+            ai_names.append(text or placeholder or f"CPU-{i + 1}")
 
         self._on_start(name, ai_names)
 
@@ -633,6 +760,17 @@ class GameScreen(QWidget):
             fan = HandFanWidget()
             fan.set_count(len(p.hand))
             box.addWidget(fan, alignment=Qt.AlignmentFlag.AlignCenter)
+
+            name_row = QHBoxLayout()
+            name_row.setContentsMargins(0, 0, 0, 0)
+            name_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            code = extract_country_code(p.name)
+            if code:
+                flag_lbl = QLabel()
+                flag_lbl.setPixmap(_draw_country_flag(code, 20, 13))
+                name_row.addWidget(flag_lbl)
+
             name_label = QLabel(f"{p.name} ({len(p.hand)} cards)")
             name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             name_label.setStyleSheet(
@@ -641,7 +779,11 @@ class GameScreen(QWidget):
                 if is_turn else
                 "color: white; font-size: 12px;"
             )
-            box.addWidget(name_label)
+            name_row.addWidget(name_label)
+
+            name_widget = QWidget()
+            name_widget.setLayout(name_row)
+            box.addWidget(name_widget)
             self.opponents_layout.addWidget(col)
 
         top = state.top_card

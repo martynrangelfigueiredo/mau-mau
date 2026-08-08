@@ -28,7 +28,7 @@ from .game import (
     is_game_over,
     game_winner,
 )
-from .ai import ai_choose_action
+from .ai import ai_choose_action, get_random_ai_names
 from .settings import ensure_profile, record_game_result, record_round_result
 
 
@@ -226,8 +226,9 @@ def setup_players() -> list[Player]:
     name = input("Enter your name: ").strip() or "Player"
     ensure_profile(name)
     players: list[Player] = [Player(name, is_human=True)]
-    for i in range(1, num_ai + 1):
-        ai_name = input(f"Enter name for AI opponent {i} (default: CPU-{i}): ").strip() or f"CPU-{i}"
+    random_ai_names = get_random_ai_names(num_ai)
+    for i, default_name in enumerate(random_ai_names, start=1):
+        ai_name = input(f"Enter name for AI opponent {i} (default: {default_name}): ").strip() or default_name
         players.append(Player(ai_name, is_human=False))
     return players
 
