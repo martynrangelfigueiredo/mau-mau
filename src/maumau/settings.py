@@ -120,6 +120,19 @@ def ensure_profile(name: str) -> None:
     _save(data)
 
 
+def delete_profile(name: str) -> bool:
+    """Delete profile *name* and its history from settings if it exists."""
+    data = _load()
+    if name not in data["profiles"]:
+        return False
+    del data["profiles"][name]
+    if data.get("last_profile") == name:
+        remaining = list(data["profiles"].keys())
+        data["last_profile"] = remaining[0] if remaining else None
+    _save(data)
+    return True
+
+
 def record_round_result(
     name: str, won: bool, points_earned: int, total_score: int, opponents: list[str],
 ) -> None:

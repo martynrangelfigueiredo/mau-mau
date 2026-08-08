@@ -61,6 +61,7 @@ from .game import (
     game_winner,
 )
 from .settings import (
+    delete_profile,
     ensure_profile,
     get_profile_history,
     get_profile_stats,
@@ -510,11 +511,23 @@ class SetupScreen(QWidget):
         self.profile_combo.currentTextChanged.connect(self._on_profile_changed)
         form.addWidget(self.profile_combo, 0, 1)
 
+        btn_layout = QHBoxLayout()
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setSpacing(12)
+
         self.history_btn = QPushButton("View History")
         self.history_btn.setStyleSheet("color: white; text-decoration: underline; border: none;")
         self.history_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.history_btn.clicked.connect(self._show_history)
-        form.addWidget(self.history_btn, 0, 2)
+        btn_layout.addWidget(self.history_btn)
+
+        self.delete_btn = QPushButton("Delete Profile")
+        self.delete_btn.setStyleSheet("color: #ff6b6b; text-decoration: underline; border: none;")
+        self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.delete_btn.clicked.connect(self._delete_profile)
+        btn_layout.addWidget(self.delete_btn)
+
+        form.addLayout(btn_layout, 0, 2)
 
         self.new_name_label = QLabel("New player name:")
         form.addWidget(self.new_name_label, 1, 0)
@@ -651,6 +664,23 @@ class SetupScreen(QWidget):
 
         dialog = HistoryDialog(self, name)
         dialog.exec()
+
+    def _delete_profile(self) -> None:
+        name = self.profile_combo.currentText()
+        if not name or name == self.NEW_PROFILE:
+            QMessageBox.warning(self, "Delete Profile", "Please select an existing profile to delete.")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Delete Profile",
+            f"Are you sure you want to delete profile '{name}'?\nThis will erase all its statistics and history permanently.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            delete_profile(name)
+            self.refresh()
 
 
 class GameScreen(QWidget):

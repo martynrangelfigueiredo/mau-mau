@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from maumau.settings import (
     _new_stats,
+    delete_profile,
     ensure_profile,
     get_profile_history,
     get_profile_stats,
@@ -30,6 +31,23 @@ def test_ensure_profile_creates_new(tmp_settings):
     stats = get_profile_stats("Alice")
     assert stats["games_played"] == 0
     assert stats["rounds_played"] == 0
+
+
+def test_delete_profile(tmp_settings):
+    ensure_profile("Alice")
+    ensure_profile("Bob")
+    assert load_last_profile() == "Bob"
+    assert "Alice" in list_profile_names()
+    assert "Bob" in list_profile_names()
+
+    # Delete Bob
+    success = delete_profile("Bob")
+    assert success is True
+    assert "Bob" not in list_profile_names()
+    assert load_last_profile() == "Alice"
+
+    # Delete non-existent profile
+    assert delete_profile("Unknown") is False
 
 
 def test_record_round_result(tmp_settings):
