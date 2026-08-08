@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mau-mau"
+version = "1.0.0"
+description = "A digital adaptation of the Mau-Mau card game"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+keywords = ["card-game", "mau-mau", "game"]
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Environment :: Console",
+    "Topic :: Games/Entertainment :: Board Games",
+]
+
+[project.scripts]
+mau-mau = "maumau.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
