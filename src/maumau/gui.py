@@ -338,10 +338,65 @@ class HistoryDialog(QDialog):
         )
 
 
+class ProfileStatsWidget(QFrame):
+    """Modern dashboard card for profile statistics and win rate analytics."""
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setStyleSheet(
+            "QFrame { "
+            "  background-color: rgba(13, 79, 28, 0.85); "
+            "  border: 1px solid rgba(255, 255, 255, 0.18); "
+            "  border-radius: 10px; "
+            "}"
+        )
+        layout = QGridLayout(self)
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setHorizontalSpacing(20)
+        layout.setVerticalSpacing(8)
+
+        self.matches_label = QLabel()
+        self.wins_label = QLabel()
+        self.winrate_label = QLabel()
+        self.score_label = QLabel()
+
+        for lbl in (self.matches_label, self.wins_label, self.winrate_label, self.score_label):
+            lbl.setStyleSheet("color: white; font-size: 13px; border: none; background: transparent;")
+
+        layout.addWidget(self.matches_label, 0, 0)
+        layout.addWidget(self.wins_label, 0, 1)
+        layout.addWidget(self.winrate_label, 1, 0)
+        layout.addWidget(self.score_label, 1, 1)
+
+        self.set_empty()
+
+    def set_empty(self) -> None:
+        self.matches_label.setText("🎮 <b>Partidas:</b> 0 rodadas")
+        self.wins_label.setText("🏆 <b>Vitórias:</b> 0 rodadas")
+        self.winrate_label.setText("📊 <b>Aproveitamento:</b> 0.0%")
+        self.score_label.setText("⭐ <b>Recorde:</b> 0 pts")
+
+    def update_stats(self, stats: dict) -> None:
+        rounds_p = stats.get("rounds_played", 0)
+        games_p = stats.get("games_played", 0)
+        rounds_w = stats.get("rounds_won", 0)
+        games_w = stats.get("games_won", 0)
+        win_rate = stats.get("win_rate_rounds", 0.0)
+        best_score = stats.get("best_score", 0)
+
+        matches_text = f"{rounds_p} rodadas" + (f" ({games_p} jogos)" if games_p > 0 else "")
+        wins_text = f"<span style='color:#ffe066;'>{rounds_w} rodadas</span>" + (f" ({games_w} jogos)" if games_w > 0 else "")
+
+        self.matches_label.setText(f"🎮 <b>Partidas:</b> {matches_text}")
+        self.wins_label.setText(f"🏆 <b>Vitórias:</b> {wins_text}")
+        self.winrate_label.setText(f"📊 <b>Aproveitamento:</b> <span style='color:#75f585;'>{win_rate}%</span>")
+        self.score_label.setText(f"⭐ <b>Recorde:</b> <span style='color:#ffe066;'>{best_score} pts</span>")
+
+
 class SetupScreen(QWidget):
     NEW_PROFILE = "+ New Player…"
 
-    def __init__(self, on_start: Callable[[str, int], None]) -> None:
+    def __init__(self, on_start: Callable[[str, list[str]], None]) -> None:
         super().__init__()
         self._on_start = on_start
         self.setStyleSheet(f"background-color: {TABLE_COLOR};")
@@ -378,14 +433,26 @@ class SetupScreen(QWidget):
         self.new_name_edit.setPlaceholderText("Type a name…")
         form.addWidget(self.new_name_edit, 1, 1)
 
-        self.stats_label = QLabel()
-        self.stats_label.setStyleSheet("color: #ffe066; font-size: 12px;")
-        form.addWidget(self.stats_label, 2, 0, 1, 2)
+        self.stats_widget = ProfileStatsWidget()
+        form.addWidget(self.stats_widget, 2, 0, 1, 3)
 
         form.addWidget(QLabel("AI opponents (1-3):"), 3, 0)
         self.ai_spin = QSpinBox()
         self.ai_spin.setRange(1, 3)
+        self.ai_spin.valueChanged.connect(self._on_ai_count_changed)
         form.addWidget(self.ai_spin, 3, 1)
+
+        self.ai_name_labels: list[QLabel] = []
+        self.ai_name_edits: list[QLineEdit] = []
+        for i in range(1, 4):
+            lbl = QLabel(f"AI {i} name:")
+            edit = QLineEdit()
+            edit.setPlaceholderText(f"CPU-{i}")
+            self.ai_name_labels.append(lbl)
+            self.ai_name_edits.append(edit)
+            row = 3 + i
+            form.addWidget(lbl, row, 0)
+            form.addWidget(edit, row, 1)
 
         start_btn = QPushButton("Start Game")
         start_btn.setStyleSheet(
@@ -396,7 +463,14 @@ class SetupScreen(QWidget):
         outer.addWidget(start_btn, alignment=Qt.AlignmentFlag.AlignCenter)
         outer.addStretch()
 
+        self._on_ai_count_changed(self.ai_spin.value())
         self.refresh()
+
+    def _on_ai_count_changed(self, count: int) -> None:
+        for i in range(3):
+            visible = i < count
+            self.ai_name_labels[i].setVisible(visible)
+            self.ai_name_edits[i].setVisible(visible)
 
     def refresh(self) -> None:
         """Reload known profiles; called whenever the setup screen is shown."""
@@ -421,13 +495,10 @@ class SetupScreen(QWidget):
         if is_new:
             self.new_name_edit.clear()
             self.new_name_edit.setFocus()
-            self.stats_label.setText("A separate history will be created for this player.")
+            self.stats_widget.set_empty()
         else:
             stats = get_profile_stats(selected)
-            self.stats_label.setText(
-                f"Games played: {stats['games_played']}  |  "
-                f"Wins: {stats['games_won']}  |  Best score: {stats['best_score']}"
-            )
+            self.stats_widget.update_stats(stats)
 
     def _start(self) -> None:
         selected = self.profile_combo.currentText()
@@ -436,7 +507,14 @@ class SetupScreen(QWidget):
         else:
             name = selected
         ensure_profile(name)
-        self._on_start(name, self.ai_spin.value())
+
+        count = self.ai_spin.value()
+        ai_names: list[str] = []
+        for i in range(count):
+            custom = self.ai_name_edits[i].text().strip()
+            ai_names.append(custom or f"CPU-{i + 1}")
+
+        self._on_start(name, ai_names)
 
     def _show_history(self) -> None:
         name = self.profile_combo.currentText()
@@ -620,10 +698,10 @@ class MauMauApp:
         self.setup_screen.refresh()
         self.stack.setCurrentWidget(self.setup_screen)
 
-    def start_game(self, name: str, num_ai: int) -> None:
+    def start_game(self, name: str, ai_names: list[str]) -> None:
         self.players = [Player(name, is_human=True)]
-        for i in range(1, num_ai + 1):
-            self.players.append(Player(f"CPU-{i}", is_human=False))
+        for ai_name in ai_names:
+            self.players.append(Player(ai_name, is_human=False))
         self.round_number = 0
         self.stack.setCurrentWidget(self.game_screen)
         self.start_round()

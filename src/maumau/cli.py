@@ -29,6 +29,8 @@ from .game import (
     game_winner,
 )
 from .ai import ai_choose_action
+from .settings import ensure_profile, record_game_result, record_round_result
+
 
 
 SUITS = list(Suit)
@@ -222,15 +224,19 @@ def setup_players() -> list[Player]:
     print("\nHow many players? (1 human + 1-3 AI opponents)")
     num_ai = _ask_int("Number of AI opponents (1-3): ", 1, 3)
     name = input("Enter your name: ").strip() or "Player"
+    ensure_profile(name)
     players: list[Player] = [Player(name, is_human=True)]
     for i in range(1, num_ai + 1):
-        players.append(Player(f"CPU-{i}", is_human=False))
+        ai_name = input(f"Enter name for AI opponent {i} (default: CPU-{i}): ").strip() or f"CPU-{i}"
+        players.append(Player(ai_name, is_human=False))
     return players
 
 
 def main() -> None:
     players = setup_players()
     round_number = 0
+    human = next(p for p in players if p.is_human)
+    opponents = [p.name for p in players if not p.is_human]
 
     while not is_game_over(players):
         round_number += 1
@@ -241,6 +247,15 @@ def main() -> None:
             print(f"\n  *** {winner.name} wins the round! ***")
         _print_scores(players)
 
+        points_earned = sum(p.hand_value() for p in players if p is not winner) if winner else 0
+        record_round_result(
+            name=human.name,
+            won=human is winner,
+            points_earned=points_earned if human is winner else 0,
+            total_score=human.score,
+            opponents=opponents,
+        )
+
         if not is_game_over(players):
             cont = input("Start next round? (y/n): ").strip().lower()
             if cont != "y":
@@ -248,6 +263,8 @@ def main() -> None:
                 sys.exit(0)
 
     champion = game_winner(players)
+    if champion:
+        record_game_result(human.name, won=champion is human, final_score=human.score)
     _print_header()
     print(f"\n🏆  {champion.name} wins the game with {champion.score} points!")
     print("Thanks for playing Mau-Mau!\n")

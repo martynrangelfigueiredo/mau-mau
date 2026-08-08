@@ -92,6 +92,16 @@ def get_profile_stats(name: str) -> dict:
     stats = _load()["profiles"].get(name, _new_stats())
     stats = stats.copy()
     stats.pop("history", None)
+
+    rounds_played = stats.get("rounds_played", 0)
+    rounds_won = stats.get("rounds_won", 0)
+    games_played = stats.get("games_played", 0)
+    games_won = stats.get("games_won", 0)
+
+    stats["win_rate_rounds"] = round((rounds_won / rounds_played * 100), 1) if rounds_played > 0 else 0.0
+    stats["win_rate_games"] = round((games_won / games_played * 100), 1) if games_played > 0 else 0.0
+    stats["total_played"] = rounds_played + games_played
+    stats["total_wins"] = rounds_won + games_won
     return stats
 
 

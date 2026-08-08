@@ -8,6 +8,19 @@ def make_players(n=2):
     return [Player(f"P{i}", is_human=False) for i in range(n)]
 
 
+def test_custom_ai_player_names():
+    human = Player("Alice", is_human=True)
+    ai1 = Player("Bot Alpha", is_human=False)
+    ai2 = Player("Bot Beta", is_human=False)
+    players = [human, ai1, ai2]
+    state = GameState(players)
+    assert state.players[0].name == "Alice"
+    assert state.players[1].name == "Bot Alpha"
+    assert state.players[2].name == "Bot Beta"
+    assert not state.players[1].is_human
+    assert not state.players[2].is_human
+
+
 def test_initial_state_hands():
     players = make_players(2)
     state = GameState(players)
