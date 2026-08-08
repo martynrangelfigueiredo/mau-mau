@@ -37,11 +37,12 @@ _SESSIONS: dict[str, dict[str, Any]] = {}
 
 
 def _serialize_card(card: Card) -> dict:
+    color = "red" if card.suit in (Suit.HEARTS, Suit.DIAMONDS) else "black"
     return {
         "suit": card.suit.value,
         "rank": card.rank.name,
         "symbol": card.rank.symbol,
-        "color": card.color,
+        "color": color,
         "points": card.points,
         "str": str(card),
     }

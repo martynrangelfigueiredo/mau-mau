@@ -108,7 +108,7 @@ function setupEventListeners() {
 
   document.querySelectorAll('.suit-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const suit = e.target.getAttribute('data-suit');
+      const suit = e.currentTarget.getAttribute('data-suit');
       modalSuit.classList.remove('active');
       if (pendingCardPlay) {
         executePlayCard(pendingCardPlay, suit);
