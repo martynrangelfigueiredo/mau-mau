@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -60,15 +61,21 @@ from .game import (
     is_game_over,
     game_winner,
 )
+from .i18n import SUPPORTED_LANGUAGES, pluralize, t
 from .settings import (
     delete_profile,
     ensure_profile,
+    get_default_player_name,
+    get_language,
     get_profile_history,
     get_profile_stats,
     list_profile_names,
     load_last_profile,
     record_game_result,
     record_round_result,
+    rename_profile,
+    reset_profile_stats,
+    set_language,
 )
 
 TABLE_COLOR = "#0b6623"
@@ -181,6 +188,27 @@ def _draw_country_flag(country_code: str, width: int = 24, height: int = 16) -> 
         painter.setBrush(QColor("#FEDF00"))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(QRectF(w * 0.3, h * 0.3, w * 0.2, h * 0.4))
+    elif code == "GB":
+        painter.fillRect(QRectF(0, 0, w, h), QColor("#00247D"))
+        painter.setBrush(QColor("#FFFFFF"))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(QRectF(w * 0.4, 0, w * 0.2, h))
+        painter.drawRect(QRectF(0, h * 0.35, w, h * 0.3))
+        painter.setBrush(QColor("#CF142B"))
+        painter.drawRect(QRectF(w * 0.44, 0, w * 0.12, h))
+        painter.drawRect(QRectF(0, h * 0.4, w, h * 0.2))
+    elif code == "ES":
+        painter.fillRect(QRectF(0, 0, w, h * 0.25), QColor("#AA151B"))
+        painter.fillRect(QRectF(0, h * 0.25, w, h * 0.5), QColor("#F1BF00"))
+        painter.fillRect(QRectF(0, h * 0.75, w, h * 0.25), QColor("#AA151B"))
+    elif code == "FR":
+        painter.fillRect(QRectF(0, 0, w / 3, h), QColor("#002395"))
+        painter.fillRect(QRectF(w / 3, 0, w / 3, h), QColor("#FFFFFF"))
+        painter.fillRect(QRectF(2 * w / 3, 0, w / 3, h), QColor("#ED2939"))
+    elif code == "IT":
+        painter.fillRect(QRectF(0, 0, w / 3, h), QColor("#009246"))
+        painter.fillRect(QRectF(w / 3, 0, w / 3, h), QColor("#FFFFFF"))
+        painter.fillRect(QRectF(2 * w / 3, 0, w / 3, h), QColor("#CE2B37"))
     else:
         painter.fillRect(QRectF(0, 0, w, h), QColor("#888888"))
 
@@ -342,19 +370,29 @@ class HandFanWidget(QWidget):
         self.count = 0
         self.setFixedHeight(SMALL_CARD_H + 10)
 
+    def _get_overlap(self) -> int:
+        if self.count <= 8:
+            return 16
+        return max(8, 120 // max(1, self.count))
+
     def set_count(self, count: int) -> None:
         self.count = count
-        shown = min(count, 6)
-        self.setFixedWidth(SMALL_CARD_W + shown * 16 + 10)
+        if count <= 0:
+            self.setFixedWidth(0)
+        else:
+            overlap = self._get_overlap()
+            self.setFixedWidth(SMALL_CARD_W + (count - 1) * overlap + 10)
         self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        if self.count <= 0:
+            return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         back = PIXMAPS.back(SMALL_CARD_W, SMALL_CARD_H)
-        shown = min(self.count, 6)
-        for i in range(shown):
-            painter.drawPixmap(5 + i * 16, 5, back)
+        overlap = self._get_overlap()
+        for i in range(self.count):
+            painter.drawPixmap(5 + i * overlap, 5, back)
 
 
 class SuitDialog(QDialog):
@@ -375,7 +413,7 @@ class SuitDialog(QDialog):
             btn = QPushButton(suit.value)
             btn.setFixedSize(56, 56)
             btn.setStyleSheet(
-                f"QPushButton {{ font-size: 22px; font-weight: bold; color: {SUIT_HEX[suit]}; }}"
+                f"font-size: 22px; font-weight: bold; color: {SUIT_HEX[suit]};"
             )
             btn.clicked.connect(partial(self._choose, suit))
             row.addWidget(btn)
@@ -392,27 +430,90 @@ class SuitDialog(QDialog):
 
 
 class HistoryDialog(QDialog):
-    """Read-only list of a profile's past rounds and games."""
+    """Read-only list of a profile's past rounds and games with option to reset."""
 
-    def __init__(self, parent: QWidget, profile_name: str) -> None:
+    def __init__(self, parent: QWidget, profile_name: str, on_reset_callback: Optional[Callable[[], None]] = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(f"History — {profile_name}")
-        self.resize(440, 420)
+        self.profile_name = profile_name
+        self.on_reset_callback = on_reset_callback
+        lang = get_language()
+        self.setWindowTitle(t("history_title", lang, name=profile_name))
+        self.resize(480, 440)
+        self.setStyleSheet("background-color: #0b6623; color: white;")
 
-        layout = QVBoxLayout(self)
-        entries = get_profile_history(profile_name, limit=50)
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(16, 16, 16, 16)
+        self._populate_list()
+
+    def _populate_list(self) -> None:
+        while self.main_layout.count():
+            item = self.main_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                while item.layout().count():
+                    child = item.layout().takeAt(0)
+                    if child.widget():
+                        child.widget().deleteLater()
+
+        lang = get_language()
+        entries = get_profile_history(self.profile_name, limit=50)
 
         if not entries:
-            layout.addWidget(QLabel("No plays recorded yet for this profile."))
+            empty_lbl = QLabel(t("no_plays_yet", lang))
+            empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty_lbl.setStyleSheet("font-size: 14px; color: #ffe066; margin: 30px;")
+            self.main_layout.addWidget(empty_lbl)
         else:
             list_widget = QListWidget()
+            list_widget.setStyleSheet(
+                "background-color: rgba(13, 79, 28, 0.95); "
+                "border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px;"
+            )
             for entry in entries:
                 list_widget.addItem(self._format_entry(entry))
-            layout.addWidget(list_widget)
+            self.main_layout.addWidget(list_widget)
 
-        close_btn = QPushButton("Close")
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 8, 0, 0)
+        btn_row.setSpacing(12)
+        btn_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        if entries:
+            reset_btn = QPushButton(t("reset_history", lang))
+            reset_btn.setStyleSheet(
+                "background-color: #d9534f; color: white; font-weight: bold; "
+                "padding: 6px 16px; border-radius: 4px;"
+            )
+            reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            reset_btn.clicked.connect(self._confirm_reset)
+            btn_row.addWidget(reset_btn)
+
+        close_btn = QPushButton("OK")
+        close_btn.setStyleSheet(
+            f"background-color: {ACCENT_COLOR}; color: black; font-weight: bold; "
+            "padding: 6px 22px; border-radius: 4px;"
+        )
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.clicked.connect(self.accept)
-        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        btn_row.addWidget(close_btn)
+
+        self.main_layout.addLayout(btn_row)
+
+    def _confirm_reset(self) -> None:
+        lang = get_language()
+        reply = QMessageBox.question(
+            self,
+            t("confirm_reset_title", lang),
+            t("confirm_reset_msg", lang, name=self.profile_name),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            reset_profile_stats(self.profile_name)
+            self._populate_list()
+            if self.on_reset_callback:
+                self.on_reset_callback()
 
     @staticmethod
     def _format_entry(entry: dict) -> str:
@@ -426,6 +527,50 @@ class HistoryDialog(QDialog):
             f"{when}  —  Round {result}, +{entry['points_earned']} pts "
             f"(total {entry['total_score']}) vs {opponents}"
         )
+
+
+class RulesDialog(QDialog):
+    """Detailed game rules modal dialog localized for the active language."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        lang = get_language()
+        self.setWindowTitle(t("rules_title", lang))
+        self.resize(560, 540)
+        self.setStyleSheet("background-color: #0b6623; color: white;")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        title = QLabel(t("rules_title", lang))
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet("font-size: 22px; font-weight: bold; color: #ffe066; margin-bottom: 8px;")
+        layout.addWidget(title)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("border: 1px solid rgba(255, 255, 255, 0.2); background-color: rgba(13, 79, 28, 0.95); border-radius: 8px;")
+
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(18, 18, 18, 18)
+
+        body_label = QLabel(t("rules_content", lang))
+        body_label.setTextFormat(Qt.TextFormat.RichText)
+        body_label.setWordWrap(True)
+        body_label.setStyleSheet("font-size: 14px; line-height: 1.6; color: #ffffff;")
+        content_layout.addWidget(body_label)
+
+        scroll.setWidget(content_widget)
+        layout.addWidget(scroll)
+
+        close_btn = QPushButton("OK")
+        close_btn.setStyleSheet(
+            f"background-color: {ACCENT_COLOR}; font-weight: bold; "
+            "font-size: 14px; padding: 6px 20px; border-radius: 4px; color: black;"
+        )
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
 
 class ProfileStatsWidget(QFrame):
@@ -461,12 +606,15 @@ class ProfileStatsWidget(QFrame):
         self.set_empty()
 
     def set_empty(self) -> None:
-        self.matches_label.setText("🎮 <b>Partidas:</b> 0 rodadas")
-        self.wins_label.setText("🏆 <b>Vitórias:</b> 0 rodadas")
-        self.winrate_label.setText("📊 <b>Aproveitamento:</b> 0.0%")
-        self.score_label.setText("⭐ <b>Recorde:</b> 0 pts")
+        lang = get_language()
+        round_lbl = pluralize(0, "round_sg", "rounds", lang)
+        self.matches_label.setText(f"🎮 <b>{t('matches', lang)}:</b> 0 {round_lbl}")
+        self.wins_label.setText(f"🏆 <b>{t('wins', lang)}:</b> 0 {round_lbl}")
+        self.winrate_label.setText(f"📊 <b>{t('win_rate', lang)}:</b> 0.0%")
+        self.score_label.setText(f"⭐ <b>{t('record', lang)}:</b> 0 {t('points', lang)}")
 
     def update_stats(self, stats: dict) -> None:
+        lang = get_language()
         rounds_p = stats.get("rounds_played", 0)
         games_p = stats.get("games_played", 0)
         rounds_w = stats.get("rounds_won", 0)
@@ -474,13 +622,18 @@ class ProfileStatsWidget(QFrame):
         win_rate = stats.get("win_rate_rounds", 0.0)
         best_score = stats.get("best_score", 0)
 
-        matches_text = f"{rounds_p} rodadas" + (f" ({games_p} jogos)" if games_p > 0 else "")
-        wins_text = f"<span style='color:#ffe066;'>{rounds_w} rodadas</span>" + (f" ({games_w} jogos)" if games_w > 0 else "")
+        rounds_p_lbl = pluralize(rounds_p, "round_sg", "rounds", lang)
+        games_p_lbl = pluralize(games_p, "game_sg", "games", lang)
+        rounds_w_lbl = pluralize(rounds_w, "round_sg", "rounds", lang)
+        games_w_lbl = pluralize(games_w, "game_sg", "games", lang)
 
-        self.matches_label.setText(f"🎮 <b>Partidas:</b> {matches_text}")
-        self.wins_label.setText(f"🏆 <b>Vitórias:</b> {wins_text}")
-        self.winrate_label.setText(f"📊 <b>Aproveitamento:</b> <span style='color:#75f585;'>{win_rate}%</span>")
-        self.score_label.setText(f"⭐ <b>Recorde:</b> <span style='color:#ffe066;'>{best_score} pts</span>")
+        matches_text = f"{rounds_p} {rounds_p_lbl}" + (f" ({games_p} {games_p_lbl})" if games_p > 0 else "")
+        wins_text = f"<span style='color:#ffe066;'>{rounds_w} {rounds_w_lbl}</span>" + (f" ({games_w} {games_w_lbl})" if games_w > 0 else "")
+
+        self.matches_label.setText(f"🎮 <b>{t('matches', lang)}:</b> {matches_text}")
+        self.wins_label.setText(f"🏆 <b>{t('wins', lang)}:</b> {wins_text}")
+        self.winrate_label.setText(f"📊 <b>{t('win_rate', lang)}:</b> <span style='color:#75f585;'>{win_rate}%</span>")
+        self.score_label.setText(f"⭐ <b>{t('record', lang)}:</b> <span style='color:#ffe066;'>{best_score} {t('points', lang)}</span>")
 
 
 class SetupScreen(QWidget):
@@ -492,57 +645,128 @@ class SetupScreen(QWidget):
         self.setStyleSheet(f"background-color: {TABLE_COLOR};")
 
         outer = QVBoxLayout(self)
+
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.addStretch()
+
+        self.lang_combo = QComboBox()
+        self.lang_combo.setIconSize(QSize(24, 16))
+        self.lang_combo.setStyleSheet("color: white; background-color: rgba(0, 0, 0, 0.5); padding: 4px 8px; border-radius: 4px;")
+        for code, info in SUPPORTED_LANGUAGES.items():
+            icon = QIcon(_draw_country_flag(info["flag"], 24, 16))
+            self.lang_combo.addItem(icon, f" {info['country']} — {info['name']}", code)
+
+        curr_lang = get_language()
+        idx = self.lang_combo.findData(curr_lang)
+        if idx >= 0:
+            self.lang_combo.setCurrentIndex(idx)
+
+        self.lang_combo.currentIndexChanged.connect(self._on_language_changed)
+        top_row.addWidget(self.lang_combo)
+        outer.addLayout(top_row)
+
         outer.addStretch()
 
         title = QLabel("MAU-MAU")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("color: white; font-size: 40px; font-weight: bold;")
+        title.setStyleSheet("color: white; font-size: 40px; font-weight: bold; margin-bottom: 5px;")
         outer.addWidget(title)
 
+        # Profile Hero Card Container
+        hero_card = QFrame()
+        hero_card.setStyleSheet(
+            "QFrame { "
+            "  background-color: rgba(13, 79, 28, 0.95); "
+            "  border: 1px solid rgba(255, 255, 255, 0.25); "
+            "  border-radius: 12px; "
+            "}"
+        )
+        hero_layout = QVBoxLayout(hero_card)
+        hero_layout.setContentsMargins(18, 14, 18, 14)
+        hero_layout.setSpacing(8)
+
+        # Primary Hero Profile Name Title
+        self.profile_title_label = QLabel()
+        self.profile_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.profile_title_label.setStyleSheet(
+            "color: #ffe066; font-size: 26px; font-weight: bold; border: none; background: transparent;"
+        )
+        hero_layout.addWidget(self.profile_title_label)
+
+        # Secondary Actions Toolbar (Rename, History, Delete, Switch Combo)
+        actions_row = QHBoxLayout()
+        actions_row.setContentsMargins(0, 0, 0, 0)
+        actions_row.setSpacing(14)
+        actions_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.rename_btn = QPushButton("✏️ Rename")
+        self.rename_btn.setStyleSheet("color: white; text-decoration: underline; border: none; background: transparent; font-size: 13px;")
+        self.rename_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.rename_btn.clicked.connect(self._rename_profile)
+        actions_row.addWidget(self.rename_btn)
+
+        self.history_btn = QPushButton("📜 History")
+        self.history_btn.setStyleSheet("color: white; text-decoration: underline; border: none; background: transparent; font-size: 13px;")
+        self.history_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.history_btn.clicked.connect(self._show_history)
+        actions_row.addWidget(self.history_btn)
+
+        self.rules_btn = QPushButton("📖 Rules")
+        self.rules_btn.setStyleSheet("color: white; text-decoration: underline; border: none; background: transparent; font-size: 13px;")
+        self.rules_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.rules_btn.clicked.connect(self._show_rules)
+        actions_row.addWidget(self.rules_btn)
+
+        self.delete_btn = QPushButton("🗑️ Delete")
+        self.delete_btn.setStyleSheet("color: #ff6b6b; text-decoration: underline; border: none; background: transparent; font-size: 13px;")
+        self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.delete_btn.clicked.connect(self._delete_profile)
+        actions_row.addWidget(self.delete_btn)
+
+        # Profile Switcher Dropdown
+        self.profile_combo = QComboBox()
+        self.profile_combo.setMinimumWidth(150)
+        self.profile_combo.setStyleSheet("color: white; background-color: #1b3a6b; padding: 3px 8px; border-radius: 4px;")
+        self.profile_combo.currentTextChanged.connect(self._on_profile_changed)
+        actions_row.addWidget(self.profile_combo)
+
+        hero_layout.addLayout(actions_row)
+
+        # New Player Name Widget (Hidden when existing profile is selected)
+        self.new_name_widget = QWidget()
+        new_name_layout = QHBoxLayout(self.new_name_widget)
+        new_name_layout.setContentsMargins(0, 4, 0, 0)
+        new_name_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.new_name_label = QLabel("New profile name:")
+        self.new_name_label.setStyleSheet("color: white; font-size: 13px; border: none; background: transparent;")
+        new_name_layout.addWidget(self.new_name_label)
+        self.new_name_edit = QLineEdit()
+        default_user = get_default_player_name()
+        self.new_name_edit.setPlaceholderText(f"Type a name (default: {default_user})…")
+        self.new_name_edit.setFixedWidth(200)
+        new_name_layout.addWidget(self.new_name_edit)
+        hero_layout.addWidget(self.new_name_widget)
+
+        outer.addWidget(hero_card, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # Dashboard Stats Widget
+        self.stats_widget = ProfileStatsWidget()
+        outer.addWidget(self.stats_widget, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # AI Opponents Section
         form = QGridLayout()
         form_widget = QWidget()
         form_widget.setLayout(form)
         form_widget.setStyleSheet("color: white; font-size: 14px;")
         outer.addWidget(form_widget, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        form.addWidget(QLabel("Profile:"), 0, 0)
-        self.profile_combo = QComboBox()
-        self.profile_combo.setMinimumWidth(160)
-        self.profile_combo.currentTextChanged.connect(self._on_profile_changed)
-        form.addWidget(self.profile_combo, 0, 1)
-
-        btn_layout = QHBoxLayout()
-        btn_layout.setContentsMargins(0, 0, 0, 0)
-        btn_layout.setSpacing(12)
-
-        self.history_btn = QPushButton("View History")
-        self.history_btn.setStyleSheet("color: white; text-decoration: underline; border: none;")
-        self.history_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.history_btn.clicked.connect(self._show_history)
-        btn_layout.addWidget(self.history_btn)
-
-        self.delete_btn = QPushButton("Delete Profile")
-        self.delete_btn.setStyleSheet("color: #ff6b6b; text-decoration: underline; border: none;")
-        self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.delete_btn.clicked.connect(self._delete_profile)
-        btn_layout.addWidget(self.delete_btn)
-
-        form.addLayout(btn_layout, 0, 2)
-
-        self.new_name_label = QLabel("New player name:")
-        form.addWidget(self.new_name_label, 1, 0)
-        self.new_name_edit = QLineEdit()
-        self.new_name_edit.setPlaceholderText("Type a name…")
-        form.addWidget(self.new_name_edit, 1, 1)
-
-        self.stats_widget = ProfileStatsWidget()
-        form.addWidget(self.stats_widget, 2, 0, 1, 3)
-
-        form.addWidget(QLabel("AI opponents (1-3):"), 3, 0)
+        self.ai_opponents_label = QLabel("AI opponents (1-3):")
+        form.addWidget(self.ai_opponents_label, 0, 0)
         self.ai_spin = QSpinBox()
         self.ai_spin.setRange(1, 3)
         self.ai_spin.valueChanged.connect(self._on_ai_count_changed)
-        form.addWidget(self.ai_spin, 3, 1)
+        form.addWidget(self.ai_spin, 0, 1)
 
         self.ai_name_labels: list[QLabel] = []
         self.ai_name_edits: list[QLineEdit] = []
@@ -570,23 +794,49 @@ class SetupScreen(QWidget):
             self.ai_name_labels.append(lbl)
             self.ai_name_edits.append(edit)
             self.ai_flag_labels.append(flag_lbl)
-            row = 3 + i
+            row = i
             form.addWidget(lbl, row, 0)
             form.addWidget(edit, row, 1)
             form.addWidget(flag_lbl, row, 2)
             _update_flag()
 
-        start_btn = QPushButton("Start Game")
-        start_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {ACCENT_COLOR}; font-weight: bold; "
-            "font-size: 15px; padding: 8px 20px; }"
+        self.start_btn = QPushButton("Start Game")
+        self.start_btn.setStyleSheet(
+            f"background-color: {ACCENT_COLOR}; font-weight: bold; "
+            "font-size: 15px; padding: 8px 24px; border-radius: 6px; color: black;"
         )
-        start_btn.clicked.connect(self._start)
-        outer.addWidget(start_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.start_btn.clicked.connect(self._start)
+        outer.addWidget(self.start_btn, alignment=Qt.AlignmentFlag.AlignCenter)
         outer.addStretch()
 
         self._on_ai_count_changed(self.ai_spin.value())
+        self.retranslate_ui()
         self.refresh()
+
+    def _on_language_changed(self, index: int) -> None:
+        code = self.lang_combo.itemData(index)
+        if code:
+            set_language(code)
+            self.retranslate_ui()
+            self._on_profile_changed(self.profile_combo.currentText())
+
+    def retranslate_ui(self) -> None:
+        lang = get_language()
+        self.rename_btn.setText(t("rename", lang))
+        self.history_btn.setText(t("history", lang))
+        self.rules_btn.setText(t("rules", lang))
+        self.delete_btn.setText(t("delete", lang))
+        self.ai_opponents_label.setText(t("ai_opponents", lang))
+        self.new_name_label.setText(t("new_profile_name", lang))
+        default_user = get_default_player_name()
+        self.new_name_edit.setPlaceholderText(t("type_name_placeholder", lang, default=default_user))
+        self.start_btn.setText(t("start_game", lang))
+        for i in range(1, 4):
+            self.ai_name_labels[i-1].setText(t("ai_name_label", lang, i=i))
+
+    def _show_rules(self) -> None:
+        dialog = RulesDialog(self)
+        dialog.exec()
 
     def _on_ai_count_changed(self, count: int) -> None:
         for i in range(3):
@@ -629,20 +879,27 @@ class SetupScreen(QWidget):
 
     def _on_profile_changed(self, selected: str) -> None:
         is_new = selected == self.NEW_PROFILE or not selected
-        self.new_name_label.setVisible(is_new)
-        self.new_name_edit.setVisible(is_new)
+        self.new_name_widget.setVisible(is_new)
+        self.rename_btn.setVisible(not is_new)
+        self.delete_btn.setVisible(not is_new)
+        self.history_btn.setVisible(not is_new)
+
         if is_new:
+            default_user = get_default_player_name()
+            lang = get_language()
+            self.profile_title_label.setText(f"👤 {default_user} ({t('new_profile', lang).replace('+', '').strip('… ')})")
             self.new_name_edit.clear()
             self.new_name_edit.setFocus()
             self.stats_widget.set_empty()
         else:
+            self.profile_title_label.setText(f"👤 {selected}")
             stats = get_profile_stats(selected)
             self.stats_widget.update_stats(stats)
 
     def _start(self) -> None:
         selected = self.profile_combo.currentText()
         if selected == self.NEW_PROFILE or not selected:
-            name = self.new_name_edit.text().strip() or "Player"
+            name = self.new_name_edit.text().strip() or get_default_player_name()
         else:
             name = selected
         ensure_profile(name)
@@ -659,11 +916,15 @@ class SetupScreen(QWidget):
     def _show_history(self) -> None:
         name = self.profile_combo.currentText()
         if not name or name == self.NEW_PROFILE:
-            QMessageBox.warning(self, "Profile Name", "Please select a profile to view its history.")
             return
 
-        dialog = HistoryDialog(self, name)
+        dialog = HistoryDialog(self, name, on_reset_callback=self._on_history_reset)
         dialog.exec()
+
+    def _on_history_reset(self) -> None:
+        name = self.profile_combo.currentText()
+        if name and name != self.NEW_PROFILE:
+            self._on_profile_changed(name)
 
     def _delete_profile(self) -> None:
         name = self.profile_combo.currentText()
@@ -681,6 +942,34 @@ class SetupScreen(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             delete_profile(name)
             self.refresh()
+
+    def _rename_profile(self) -> None:
+        old_name = self.profile_combo.currentText()
+        if not old_name or old_name == self.NEW_PROFILE:
+            QMessageBox.warning(self, "Rename Profile", "Please select an existing profile to rename.")
+            return
+
+        new_name, ok = QInputDialog.getText(
+            self,
+            "Rename Profile",
+            f"Enter new name for profile '{old_name}':",
+            QLineEdit.EchoMode.Normal,
+            old_name,
+        )
+        if not ok or not new_name.strip() or new_name.strip() == old_name:
+            return
+
+        clean_new = new_name.strip()
+        if not rename_profile(old_name, clean_new):
+            QMessageBox.warning(
+                self,
+                "Rename Profile",
+                f"Could not rename profile. A profile named '{clean_new}' already exists.",
+            )
+            return
+
+        self.refresh()
+        self.profile_combo.setCurrentText(clean_new)
 
 
 class GameScreen(QWidget):
@@ -749,8 +1038,8 @@ class GameScreen(QWidget):
 
         self.draw_button = QPushButton("Draw Card")
         self.draw_button.setStyleSheet(
-            f"QPushButton {{ background-color: {ACCENT_COLOR}; font-weight: bold; "
-            "font-size: 13px; padding: 6px 16px; }"
+            f"background-color: {ACCENT_COLOR}; font-weight: bold; "
+            "font-size: 13px; padding: 6px 16px; border-radius: 4px; color: black;"
         )
         self.draw_button.clicked.connect(self.app.on_draw)
         bottom_layout.addWidget(self.draw_button, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -769,10 +1058,14 @@ class GameScreen(QWidget):
                 widget.setEnabled(enabled)
 
     def render(self, state: GameState, players: list[Player], round_number: int) -> None:
-        self.round_label.setText(f"Round {round_number}")
+        lang = get_language()
+        self.draw_button.setText(t("draw_card", lang))
+        self.round_label.setText(t("round_num", lang, n=round_number))
+        pts_str = t("points", lang)
+        first_win_str = t("first_to_win", lang, score=WINNING_SCORE)
         self.score_label.setText(
-            "  |  ".join(f"{p.name}: {p.score} pts" for p in players)
-            + f"   (First to {WINNING_SCORE} wins)"
+            "  |  ".join(f"{p.name}: {p.score} {pts_str}" for p in players)
+            + f"   {first_win_str}"
         )
 
         while self.opponents_layout.count():
@@ -801,7 +1094,8 @@ class GameScreen(QWidget):
                 flag_lbl.setPixmap(_draw_country_flag(code, 20, 13))
                 name_row.addWidget(flag_lbl)
 
-            name_label = QLabel(f"{p.name} ({len(p.hand)} cards)")
+            hand_cards_str = pluralize(len(p.hand), "hand_cards_count_one", "hand_cards_count", lang)
+            name_label = QLabel(f"{p.name} ({hand_cards_str})")
             name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             name_label.setStyleSheet(
                 "color: #000; background-color: #ffe066; font-weight: bold; "
@@ -818,13 +1112,13 @@ class GameScreen(QWidget):
 
         top = state.top_card
         self.top_card_label.setPixmap(PIXMAPS.face(top))
-        self.deck_label.setText(f"Deck: {len(state.deck)} cards")
+        self.deck_label.setText(pluralize(len(state.deck), "deck_count_one", "deck_count", lang))
 
         info_lines = []
         if state.declared_suit is not None:
-            info_lines.append(f"Declared suit: {state.declared_suit.value}")
+            info_lines.append(t("declared_suit", lang, s=state.declared_suit.value))
         if state.draw_stack > 0:
-            info_lines.append(f"\u26A0 Draw stack: {state.draw_stack} cards pending!")
+            info_lines.append(pluralize(state.draw_stack, "draw_stack_alert_one", "draw_stack_alert", lang))
         self.info_label.setText("\n".join(info_lines))
 
         human = next(p for p in players if p.is_human)
@@ -884,7 +1178,8 @@ class MauMauApp:
     def start_round(self) -> None:
         self.round_number += 1
         self.state = GameState(self.players)
-        self.game_screen.set_status(f"Starting card: {self.state.top_card}")
+        lang = get_language()
+        self.game_screen.set_status(t("msg_starting_card", lang, card=self.state.top_card))
         self.process_turn()
 
     def process_turn(self) -> None:
@@ -893,12 +1188,13 @@ class MauMauApp:
             self.end_round()
             return
 
+        lang = get_language()
         if self.state.skip_next:
             skipped = self.state.current_player
             self.state.skip_next = False
             self.state.advance_turn()
             self.game_screen.render(self.state, self.players, self.round_number)
-            self.game_screen.set_status(f"{skipped.name} is skipped!")
+            self.game_screen.set_status(t("msg_skipped", lang, name=skipped.name))
             QTimer.singleShot(AI_DELAY_MS, self.process_turn)
             return
 
@@ -929,11 +1225,12 @@ class MauMauApp:
         if not player.is_human:
             return
 
+        lang = get_language()
         if state.draw_stack > 0:
             if card.rank != DRAW_TWO_RANK or not state.is_valid_play(card):
                 return
             state.play_card(player, card)
-            self.game_screen.set_status(f"You played {card} to chain the draw penalty.")
+            self.game_screen.set_status(t("msg_you_chain_penalty", lang, card=card))
             self.game_screen.set_controls_enabled(False)
             self.after_action()
             return
@@ -955,9 +1252,10 @@ class MauMauApp:
         player = state.current_player
         state.play_card(player, card, suit)
 
-        msg = f"You played {card}."
+        lang = get_language()
+        msg = t("msg_you_played", lang, card=card)
         if suit:
-            msg += f" Declared suit: {suit.value}"
+            msg += t("msg_ai_declares_suit", lang, suit=suit.value)
         if len(player.hand) == 1:
             msg += "  *** MAU! ***"
         elif len(player.hand) == 0:
@@ -973,10 +1271,11 @@ class MauMauApp:
         if not player.is_human:
             return
 
+        lang = get_language()
         if state.draw_stack > 0:
             amount = state.draw_stack
             state.apply_draw_penalty(player)
-            self.game_screen.set_status(f"You drew {amount} cards.")
+            self.game_screen.set_status(t("msg_you_drew_amount", lang, amount=amount))
             self.game_screen.set_controls_enabled(False)
             self.after_action()
             return
@@ -986,26 +1285,28 @@ class MauMauApp:
             self.game_screen.set_controls_enabled(False)
             self._offer_play_drawn(drawn)
         else:
-            self.game_screen.set_status(f"You drew {drawn}.")
+            self.game_screen.set_status(t("msg_you_drew_card", lang, card=drawn))
             self.game_screen.set_controls_enabled(False)
             self.after_action()
 
     def _offer_play_drawn(self, drawn: Card) -> None:
         assert self.state is not None
         self.game_screen.render(self.state, self.players, self.round_number)
+        lang = get_language()
         answer = QMessageBox.question(
-            self.window, "Card drawn",
-            f"You drew {drawn}, which is playable. Play it now?",
+            self.window,
+            t("dialog_card_drawn_title", lang),
+            t("dialog_card_drawn_msg", lang, card=drawn),
         )
         if answer != QMessageBox.StandardButton.Yes:
-            self.game_screen.set_status(f"You drew {drawn} and kept it.")
+            self.game_screen.set_status(t("msg_you_drew_kept", lang, card=drawn))
             self.after_action()
             return
 
         if drawn.rank == WILD_RANK:
             suit = SuitDialog.ask(self.window)
             if suit is None:
-                self.game_screen.set_status(f"You drew {drawn} and kept it.")
+                self.game_screen.set_status(t("msg_you_drew_kept", lang, card=drawn))
                 self.after_action()
                 return
             self._finish_human_play(drawn, suit)
@@ -1019,35 +1320,36 @@ class MauMauApp:
         assert self.state is not None
         state = self.state
         player = state.current_player
+        lang = get_language()
 
         if state.draw_stack > 0:
             chainable = [c for c in player.hand if state.is_valid_play(c)]
             if not chainable:
                 amount = state.draw_stack
                 state.apply_draw_penalty(player)
-                self.game_screen.set_status(f"{player.name} draws {amount} cards.")
+                self.game_screen.set_status(t("msg_ai_draws_amount", lang, name=player.name, amount=amount))
                 self.after_action()
                 return
 
         card, declared = ai_choose_action(state, player)
         if card is None:
             drawn = state.draw_one(player)
-            msg = f"{player.name} draws a card."
+            msg = t("msg_ai_draws_card", lang, name=player.name)
             if state.is_valid_play(drawn):
                 drawn_declared: Optional[Suit] = None
                 if drawn.rank == WILD_RANK:
                     suit_counts = Counter(c.suit for c in player.hand if c.rank != WILD_RANK)
                     drawn_declared = suit_counts.most_common(1)[0][0] if suit_counts else Suit.HEARTS
                 state.play_card(player, drawn, drawn_declared)
-                msg += f" Plays {drawn}."
+                msg += t("msg_ai_plays_drawn", lang, card=drawn)
             self.game_screen.set_status(msg)
             self.after_action()
             return
 
         state.play_card(player, card, declared)
-        msg = f"{player.name} plays {card}."
+        msg = t("msg_ai_plays", lang, name=player.name, card=card)
         if declared:
-            msg += f" Declares suit: {declared.value}"
+            msg += t("msg_ai_declares_suit", lang, suit=declared.value)
         if len(player.hand) == 1:
             msg += "  MAU!"
         elif len(player.hand) == 0:
@@ -1081,23 +1383,32 @@ class MauMauApp:
 
         self.game_screen.render(self.state, self.players, self.round_number)
         self.game_screen.set_controls_enabled(False)
+        lang = get_language()
 
         if winner:
-            QMessageBox.information(self.window, "Round over", f"{winner.name} wins the round!")
+            QMessageBox.information(
+                self.window,
+                t("dialog_round_over_title", lang),
+                t("dialog_round_over_msg", lang, name=winner.name),
+            )
 
         if is_game_over(self.players):
             champion = game_winner(self.players)
             assert champion is not None
             record_game_result(human.name, won=champion is human, final_score=human.score)
             QMessageBox.information(
-                self.window, "Game over",
-                f"\U0001F3C6 {champion.name} wins the game with "
-                f"{champion.score} points!\nThanks for playing Mau-Mau!",
+                self.window,
+                t("dialog_game_over_title", lang),
+                t("dialog_game_over_msg", lang, name=champion.name, score=champion.score),
             )
             self.show_setup_screen()
             return
 
-        answer = QMessageBox.question(self.window, "Next round", "Start next round?")
+        answer = QMessageBox.question(
+            self.window,
+            t("dialog_next_round_title", lang),
+            t("dialog_next_round_msg", lang),
+        )
         if answer == QMessageBox.StandardButton.Yes:
             self.start_round()
         else:

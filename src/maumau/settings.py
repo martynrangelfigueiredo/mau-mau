@@ -18,10 +18,22 @@ history (rounds/games played, wins, scores) in ~/.mau-mau/settings.json."""
 
 from __future__ import annotations
 
+import getpass
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+
+def get_default_player_name() -> str:
+    """Return the logged-in OS username, falling back to 'Player' if unresolvable."""
+    try:
+        name = getpass.getuser().strip()
+        if name:
+            return name
+    except Exception:
+        pass
+    return "Player"
 
 
 def _new_stats() -> dict:
@@ -38,6 +50,28 @@ def _new_stats() -> dict:
 
 
 _MAX_HISTORY_ENTRIES = 200
+
+
+import hashlib
+import hmac
+
+_SECRET_SALT = b"mau-mau-v1-anti-tamper-secure-hash-salt-key-2024"
+
+
+def _compute_profile_signature(stats: dict) -> str:
+    """Compute HMAC-SHA256 checksum over profile stats and history to detect manual OS tampering."""
+    payload = json.dumps(
+        {
+            "games_played": stats.get("games_played", 0),
+            "games_won": stats.get("games_won", 0),
+            "rounds_played": stats.get("rounds_played", 0),
+            "rounds_won": stats.get("rounds_won", 0),
+            "best_score": stats.get("best_score", 0),
+            "history": stats.get("history", []),
+        },
+        sort_keys=True,
+    )
+    return hmac.new(_SECRET_SALT, payload.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def _settings_file() -> Path:
@@ -62,17 +96,73 @@ def _load() -> dict:
 
     data.setdefault("last_profile", None)
     data.setdefault("profiles", {})
-    for stats in data["profiles"].values():
+    for name, stats in list(data["profiles"].items()):
         # Fill in any fields missing from profiles saved by older versions.
         for key, default in _new_stats().items():
             stats.setdefault(key, [] if isinstance(default, list) else default)
+
+        # Verify signature to detect manual OS file tampering
+        saved_sig = stats.get("signature")
+        if saved_sig is not None:
+            expected_sig = _compute_profile_signature(stats)
+            if not hmac.compare_digest(saved_sig, expected_sig):
+                # Tampering detected! Reset tampered profile stats cleanly.
+                data["profiles"][name] = _new_stats()
+
     return data
 
 
 def _save(data: dict) -> None:
     path = _settings_file()
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Sign all profile stats before persisting to disk
+    for stats in data.get("profiles", {}).values():
+        stats["signature"] = _compute_profile_signature(stats)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+import locale
+
+
+def get_system_language() -> str:
+    """Detect OS language and return matching supported game language code, or 'en' if unsupported."""
+    from .i18n import SUPPORTED_LANGUAGES
+    try:
+        loc = None
+        if hasattr(locale, "getdefaultlocale"):
+            loc = locale.getdefaultlocale()[0]
+        if not loc and hasattr(locale, "getlocale"):
+            loc = locale.getlocale()[0]
+        if loc:
+            loc_clean = loc.replace("-", "_")
+            # 1. Exact match (e.g. 'pt_BR', 'pt_PT')
+            if loc_clean in SUPPORTED_LANGUAGES:
+                return loc_clean
+            # 2. Match two-letter prefix (e.g. 'pt' -> 'pt_BR' or 'pt_PT', 'de', 'nl', 'pl', 'cs', 'hu', 'es', 'fr', 'it', 'en')
+            prefix = loc_clean.split("_")[0].lower()
+            if prefix == "pt":
+                return "pt_PT" if "PT" in loc_clean.upper() else "pt_BR"
+            for code in SUPPORTED_LANGUAGES:
+                if code == prefix:
+                    return code
+    except Exception:
+        pass
+    return "en"
+
+
+def get_language() -> str:
+    """Return saved language preference, or auto-detect OS language on first launch (falling back to 'en')."""
+    data = _load()
+    if "language" in data:
+        return data["language"]
+    return get_system_language()
+
+
+def set_language(code: str) -> None:
+    """Save the user's explicitly selected language preference."""
+    data = _load()
+    data["language"] = code
+    _save(data)
 
 
 def list_profile_names() -> list[str]:
@@ -129,6 +219,35 @@ def delete_profile(name: str) -> bool:
     if data.get("last_profile") == name:
         remaining = list(data["profiles"].keys())
         data["last_profile"] = remaining[0] if remaining else None
+    _save(data)
+    return True
+
+
+def rename_profile(old_name: str, new_name: str) -> bool:
+    """Rename profile *old_name* to *new_name*, transferring stats and history."""
+    clean_new = new_name.strip()
+    if not clean_new:
+        return False
+    data = _load()
+    if old_name not in data["profiles"]:
+        return False
+    if clean_new != old_name and clean_new in data["profiles"]:
+        return False
+
+    stats = data["profiles"].pop(old_name)
+    data["profiles"][clean_new] = stats
+    if data.get("last_profile") == old_name:
+        data["last_profile"] = clean_new
+    _save(data)
+    return True
+
+
+def reset_profile_stats(name: str) -> bool:
+    """Reset statistics and clear game history for profile *name*."""
+    data = _load()
+    if name not in data["profiles"]:
+        return False
+    data["profiles"][name] = _new_stats()
     _save(data)
     return True
 

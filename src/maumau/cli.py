@@ -29,7 +29,7 @@ from .game import (
     game_winner,
 )
 from .ai import ai_choose_action, get_random_ai_names
-from .settings import ensure_profile, record_game_result, record_round_result
+from .settings import ensure_profile, get_default_player_name, record_game_result, record_round_result
 
 
 
@@ -223,7 +223,8 @@ def setup_players() -> list[Player]:
     _print_header()
     print("\nHow many players? (1 human + 1-3 AI opponents)")
     num_ai = _ask_int("Number of AI opponents (1-3): ", 1, 3)
-    name = input("Enter your name: ").strip() or "Player"
+    default_human = get_default_player_name()
+    name = input(f"Enter your name (default: {default_human}): ").strip() or default_human
     ensure_profile(name)
     players: list[Player] = [Player(name, is_human=True)]
     random_ai_names = get_random_ai_names(num_ai)
