@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mau-Mau Web Card Game</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app" class="app-container">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="logo">🎴 MAU-MAU</div>
+      <div class="header-actions">
+        <select id="lang-selector" class="lang-selector"></select>
+        <button id="btn-rules" class="btn btn-secondary">📖 <span data-i18n="rules">Rules</span></button>
+        <button id="btn-stats" class="btn btn-secondary">📊 <span data-i18n="matches">Stats</span></button>
+      </div>
+    </header>
+
+    <!-- Setup View -->
+    <section id="view-setup" class="view active">
+      <div class="card-panel setup-card">
+        <h1>MAU-MAU</h1>
+        <p class="subtitle" data-i18n="first_to_win">(First player to reach 150 pts wins!)</p>
+        
+        <div class="form-group">
+          <label for="player-name-input" data-i18n="new_profile_name">Player Profile Name:</label>
+          <input type="text" id="player-name-input" class="input-text" placeholder="Enter your name..." value="Player">
+        </div>
+
+        <div class="form-group">
+          <label for="ai-count-select" data-i18n="ai_opponents">Choose number of AI opponents (1 to 3):</label>
+          <select id="ai-count-select" class="select-input">
+            <option value="1">1 Opponent</option>
+            <option value="2" selected>2 Opponents</option>
+            <option value="3">3 Opponents</option>
+          </select>
+        </div>
+
+        <button id="btn-start" class="btn btn-primary btn-large" data-i18n="start_game">🚀 Start Playing Now!</button>
+      </div>
+    </section>
+
+    <!-- Game Table View -->
+    <section id="view-game" class="view">
+      <!-- Opponents Area -->
+      <div id="opponents-container" class="opponents-container"></div>
+
+      <!-- Center Table (Discard Pile & Draw Deck) -->
+      <div class="center-table">
+        <div class="deck-container">
+          <div id="draw-deck" class="card-back-stack" title="Click to draw card">
+            <span class="stack-label" data-i18n="draw_card">📥 Draw</span>
+            <span id="deck-count-badge" class="badge">52</span>
+          </div>
+        </div>
+
+        <div class="discard-container">
+          <div id="top-card" class="card-slot"></div>
+          <div id="suit-indicator" class="suit-indicator hidden"></div>
+        </div>
+      </div>
+
+      <!-- Status Bar -->
+      <div id="status-narration" class="status-narration">Welcome to Mau-Mau!</div>
+
+      <!-- Player Hand Area -->
+      <div class="player-area">
+        <div class="player-header">
+          <span id="player-name-display" class="player-name">Player</span>
+          <span id="player-score-display" class="player-score">0 pts</span>
+          <button id="btn-draw" class="btn btn-primary" data-i18n="draw_card">📥 Draw Card</button>
+        </div>
+        <div id="player-hand" class="hand-container"></div>
+      </div>
+    </section>
+
+    <!-- Rules Modal -->
+    <div id="modal-rules" class="modal">
+      <div class="modal-content">
+        <span class="close-modal">&times;</span>
+        <div id="rules-body"></div>
+      </div>
+    </div>
+
+    <!-- Suit Declaration Modal -->
+    <div id="modal-suit" class="modal">
+      <div class="modal-content suit-modal-content">
+        <h3>🎨 Choose New Suit:</h3>
+        <div class="suit-grid">
+          <button class="suit-btn heart" data-suit="♥">♥ Copas / Hearts</button>
+          <button class="suit-btn diamond" data-suit="♦">♦ Ouros / Diamonds</button>
+          <button class="suit-btn club" data-suit="♣">♣ Paus / Clubs</button>
+          <button class="suit-btn spade" data-suit="♠">♠ Espadas / Spades</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- History & Stats Modal -->
+    <div id="modal-stats" class="modal">
+      <div class="modal-content">
+        <span class="close-modal">&times;</span>
+        <h2 id="stats-title">Player History</h2>
+        <div id="stats-body"></div>
+        <button id="btn-reset-stats" class="btn btn-danger" style="margin-top: 15px;">🧹 Reset History</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

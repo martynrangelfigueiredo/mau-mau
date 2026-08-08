@@ -1,0 +1,435 @@
+/* Mau-Mau Web App Stylesheet - Modern Glassmorphism Casino Theme */
+:root {
+  --bg-table: #0b6623;
+  --bg-table-dark: #053b13;
+  --primary: #f5c518;
+  --primary-hover: #e0b010;
+  --secondary: #1a472a;
+  --accent-gold: #ffe066;
+  --danger: #dc3545;
+  --card-bg: #ffffff;
+  --text-dark: #1e1e1e;
+  --text-light: #ffffff;
+  --glass-bg: rgba(0, 0, 0, 0.4);
+  --glass-border: rgba(255, 255, 255, 0.15);
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font);
+  background: radial-gradient(circle, var(--bg-table) 0%, var(--bg-table-dark) 100%);
+  color: var(--text-light);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 10px;
+}
+
+/* Top Bar */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  padding: 10px 20px;
+  border-radius: 12px;
+}
+
+.logo {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--primary);
+  letter-spacing: 1px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.lang-selector {
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: 1px solid var(--glass-border);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+/* Buttons */
+.btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #000;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: white;
+}
+
+/* Views */
+.view {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.view.active {
+  display: flex;
+}
+
+/* Setup Panel */
+.setup-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(15px);
+  border: 1px solid var(--glass-border);
+  padding: 30px;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 450px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+.setup-card h1 {
+  font-size: 2.5rem;
+  color: var(--primary);
+  margin-bottom: 5px;
+}
+
+.subtitle {
+  color: var(--accent-gold);
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.input-text, .select-input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0,0,0,0.4);
+  color: white;
+  font-size: 1rem;
+}
+
+.btn-large {
+  width: 100%;
+  padding: 12px;
+  font-size: 1.1rem;
+}
+
+/* Game Table View */
+.opponents-container {
+  display: flex;
+  justify-content: space-around;
+  width: 100%;
+  padding: 10px;
+  gap: 15px;
+}
+
+.opponent-card {
+  background: var(--glass-bg);
+  padding: 10px 15px;
+  border-radius: 10px;
+  text-align: center;
+  border: 1px solid var(--glass-border);
+  min-width: 140px;
+}
+
+.opponent-card.active-turn {
+  border-color: var(--primary);
+  box-shadow: 0 0 15px rgba(245, 197, 24, 0.5);
+}
+
+.card-fan-back {
+  display: flex;
+  justify-content: center;
+  margin-top: 5px;
+}
+
+.mini-card-back {
+  width: 24px;
+  height: 36px;
+  background: #b71c1c;
+  border: 1px solid #fff;
+  border-radius: 4px;
+  margin-left: -12px;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+}
+
+.mini-card-back:first-child {
+  margin-left: 0;
+}
+
+/* Center Table */
+.center-table {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 40px;
+  flex: 1;
+}
+
+.card-back-stack {
+  width: 90px;
+  height: 130px;
+  background: linear-gradient(135deg, #b71c1c 0%, #880e4f 100%);
+  border: 2px solid white;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 6px 15px rgba(0,0,0,0.4);
+  transition: transform 0.2s;
+}
+
+.card-back-stack:hover {
+  transform: scale(1.05);
+}
+
+.badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: var(--primary);
+  color: black;
+  font-weight: 800;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+/* Playing Card Render */
+.card-item {
+  width: 90px;
+  height: 130px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  border: 2px solid #ddd;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px;
+  font-weight: bold;
+  user-select: none;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+
+.card-item.red {
+  color: #d32f2f;
+}
+
+.card-item.black {
+  color: #212121;
+}
+
+.card-item:hover:not(.disabled) {
+  transform: translateY(-12px);
+  box-shadow: 0 8px 20px rgba(245, 197, 24, 0.4);
+}
+
+.card-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.card-corner {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.card-center-suit {
+  font-size: 2.2rem;
+  align-self: center;
+}
+
+/* Status Narration */
+.status-narration {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-weight: 600;
+  color: var(--accent-gold);
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+/* Player Hand Container */
+.player-area {
+  width: 100%;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  padding: 15px;
+  border-radius: 16px;
+}
+
+.player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.player-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.player-score {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.hand-container {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-height: 140px;
+  align-items: center;
+}
+
+/* Modals */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(5px);
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+}
+
+.modal.active {
+  display: flex;
+}
+
+.modal-content {
+  background: #122818;
+  border: 2px solid var(--primary);
+  padding: 25px;
+  border-radius: 16px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.close-modal {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--primary);
+}
+
+.suit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.suit-btn {
+  padding: 15px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+.suit-btn.heart, .suit-btn.diamond {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.suit-btn.club, .suit-btn.spade {
+  background: #eceff1;
+  color: #263238;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 768px) {
+  .card-item, .card-back-stack {
+    width: 65px;
+    height: 95px;
+  }
+  .card-center-suit {
+    font-size: 1.5rem;
+  }
+  .center-table {
+    gap: 15px;
+  }
+}
