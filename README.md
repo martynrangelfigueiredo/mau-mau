@@ -5,6 +5,8 @@ Crazy Eights and UNO.  Players compete to discard their 5-card hands using a
 32-card deck, utilising power cards and strategic calls to be the first to
 reach **150 points**.
 
+Play it with a windowed desktop GUI (built with [PySide6](https://www.qt.io/qt-for-python), the free/open-source Qt bindings for Python, LGPLv3) or the original text-based console interface. Card artwork is drawn entirely in code (vector shapes, standard pip layouts, Unicode suit glyphs) — no third-party images, so there are no licensing or trademark concerns.
+
 [![CI](https://github.com/martynrangelfigueiredo/mau-mau/actions/workflows/ci.yml/badge.svg)](https://github.com/martynrangelfigueiredo/mau-mau/actions/workflows/ci.yml)
 
 ---
@@ -33,6 +35,9 @@ reach **150 points**.
 ## Requirements
 
 * Python ≥ 3.9 (GPL-compatible, open-source)
+* [PySide6](https://pypi.org/project/PySide6/) (LGPLv3, Qt for Python) for the
+  windowed GUI — install with the `gui` extra: `pip install -e ".[gui]"`.
+  Not required for the console version.
 
 ---
 
@@ -43,8 +48,9 @@ reach **150 points**.
 ```bash
 git clone https://github.com/martynrangelfigueiredo/mau-mau.git
 cd mau-mau
-pip install -e .
-mau-mau          # or: python -m maumau
+pip install -e ".[gui]"
+mau-mau-gui      # windowed GUI (recommended)
+mau-mau          # or: text-based console version, also: python -m maumau
 ```
 
 ### Download Windows binary
@@ -54,8 +60,9 @@ Pre-built Windows binaries are attached to every
 
 | File | Description |
 |------|-------------|
-| `mau-mau.exe` | Standalone portable executable (no installer needed) |
-| `mau-mau-setup.exe` | Full installer — adds Start Menu shortcut and uninstaller |
+| `mau-mau-gui.exe` | Standalone windowed GUI executable (no installer needed) |
+| `mau-mau.exe` | Standalone console/text executable (no installer needed) |
+| `mau-mau-setup.exe` | Full installer — installs both, adds Start Menu shortcuts and uninstaller |
 
 ---
 
@@ -71,11 +78,14 @@ Pre-built Windows binaries are attached to every
 ### Steps
 
 ```powershell
-# 1. Install PyInstaller
+# 1. Install PyInstaller and the GUI dependency
 pip install pyinstaller
+pip install -e ".[gui]"
 
-# 2. Build standalone .exe
+# 2. Build standalone .exe files
 pyinstaller --onefile --name mau-mau --console src/maumau/__main__.py
+pyinstaller --onefile --name mau-mau-gui --windowed --collect-all PySide6 `
+  src/maumau/gui.py
 
 # 3. Build installer  (requires NSIS in PATH)
 makensis installer/mau-mau.nsi
@@ -118,7 +128,7 @@ as an **MSIX** package using the
 ## Development
 
 ```bash
-pip install -e . pytest
+pip install -e ".[gui]" pytest
 python -m pytest tests/ -v
 ```
 
@@ -133,6 +143,7 @@ All tools used in the build pipeline are also open-source:
 | Tool | License |
 |------|---------|
 | Python | PSF (GPL-compatible) |
+| PySide6 (Qt for Python) | LGPLv3 |
 | PyInstaller | GPL-2.0 |
 | NSIS | zlib/libpng (OSI-approved) |
 | GitHub Actions | free for public repos |

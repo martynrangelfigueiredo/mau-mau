@@ -19,6 +19,10 @@ classifiers = [
 
 [project.scripts]
 mau-mau = "maumau.cli:main"
+mau-mau-gui = "maumau.gui:main"
+
+[project.optional-dependencies]
+gui = ["PySide6>=6.6"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

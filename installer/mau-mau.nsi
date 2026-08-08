@@ -7,7 +7,8 @@
 
 !define APP_NAME    "Mau-Mau"
 !define APP_VERSION "1.0.0"
-!define APP_EXE     "mau-mau.exe"
+!define APP_EXE     "mau-mau-gui.exe"
+!define APP_EXE_CLI "mau-mau.exe"
 !define PUBLISHER   "mau-mau contributors"
 !define INSTALL_DIR "$PROGRAMFILES64\${APP_NAME}"
 !define UNINSTALLER "uninstall.exe"
@@ -44,11 +45,14 @@ Section "Mau-Mau (required)" SecMain
 
   SetOutPath "${INSTALL_DIR}"
   File "..\dist\${APP_EXE}"
+  File "..\dist\${APP_EXE_CLI}"
 
-  ; Start Menu shortcut
+  ; Start Menu shortcuts (windowed GUI is the default; console build kept for CLI fans)
   CreateDirectory "$SMPROGRAMS\${APP_NAME}"
   CreateShortcut  "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" \
                   "${INSTALL_DIR}\${APP_EXE}"
+  CreateShortcut  "$SMPROGRAMS\${APP_NAME}\${APP_NAME} (Console).lnk" \
+                  "${INSTALL_DIR}\${APP_EXE_CLI}"
   CreateShortcut  "$SMPROGRAMS\${APP_NAME}\Uninstall.lnk" \
                   "${INSTALL_DIR}\${UNINSTALLER}"
 
@@ -75,10 +79,12 @@ SectionEnd
 
 Section "Uninstall"
   Delete "${INSTALL_DIR}\${APP_EXE}"
+  Delete "${INSTALL_DIR}\${APP_EXE_CLI}"
   Delete "${INSTALL_DIR}\${UNINSTALLER}"
   RMDir  "${INSTALL_DIR}"
 
   Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
+  Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME} (Console).lnk"
   Delete "$SMPROGRAMS\${APP_NAME}\Uninstall.lnk"
   RMDir  "$SMPROGRAMS\${APP_NAME}"
 

@@ -22,19 +22,23 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e .
+          pip install -e ".[gui]"
           pip install pyinstaller
 
       - name: Build .exe with PyInstaller
         run: |
           pyinstaller --onefile --name mau-mau --console `
             src/maumau/__main__.py
+          pyinstaller --onefile --name mau-mau-gui --windowed --collect-all PySide6 `
+            src/maumau/gui.py
 
       - name: Upload .exe artifact
         uses: actions/upload-artifact@v4
         with:
           name: mau-mau-exe
-          path: dist/mau-mau.exe
+          path: |
+            dist/mau-mau.exe
+            dist/mau-mau-gui.exe
 
       - name: Install NSIS
         run: |
@@ -77,5 +81,6 @@ jobs:
         with:
           files: |
             dist/mau-mau.exe
+            dist/mau-mau-gui.exe
             installer/mau-mau-setup.exe
           generate_release_notes: true
