@@ -1,0 +1,81 @@
+name: Build Windows Installer
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install pyinstaller
+
+      - name: Build .exe with PyInstaller
+        run: |
+          pyinstaller --onefile --name mau-mau --console `
+            src/maumau/__main__.py
+
+      - name: Upload .exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mau-mau-exe
+          path: dist/mau-mau.exe
+
+      - name: Install NSIS
+        run: |
+          choco install nsis --no-progress -y
+
+      - name: Build NSIS installer (.exe setup)
+        run: |
+          makensis installer/mau-mau.nsi
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mau-mau-installer
+          path: installer/mau-mau-setup.exe
+
+  release:
+    needs: build-windows
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download .exe artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mau-mau-exe
+          path: dist/
+
+      - name: Download installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mau-mau-installer
+          path: installer/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/mau-mau.exe
+            installer/mau-mau-setup.exe
+          generate_release_notes: true
