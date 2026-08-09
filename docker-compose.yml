@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   maumau-web:
     build:
@@ -8,6 +6,9 @@ services:
     container_name: maumau-web-app
     ports:
       - "8000:8000"
+    volumes:
+      - ./src/maumau:/app/src/maumau
+      - ./src/maumau/web:/app/maumau/web
     environment:
       - PORT=8000
       - DB_HOST=mariadb

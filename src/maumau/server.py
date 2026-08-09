@@ -30,7 +30,15 @@ from maumau.settings import (
     set_language,
 )
 
-WEB_DIR = Path(__file__).parent / "web"
+# Resolução dinâmica da pasta web para Docker e ambiente local
+_PATHS_TO_CHECK = [
+    Path(__file__).resolve().parent / "web",
+    Path("/app/src/maumau/web"),
+    Path("/app/maumau/web"),
+    Path.cwd() / "src" / "maumau" / "web",
+]
+
+WEB_DIR = next((p for p in _PATHS_TO_CHECK if p.exists() and p.is_dir()), _PATHS_TO_CHECK[0])
 
 # Active web sessions in-memory store
 _SESSIONS: dict[str, dict[str, Any]] = {}
@@ -129,7 +137,7 @@ class MauMauWebHandler(BaseHTTPRequestHandler):
 
     def _send_file(self, file_path: Path, content_type: str) -> None:
         if not file_path.exists() or not file_path.is_file():
-            self.send_error(HTTPStatus.NOT_FOUND, "File not found")
+            self.send_error(HTTPStatus.NOT_FOUND, f"File not found: {file_path.name}")
             return
         data = file_path.read_bytes()
         self.send_response(HTTPStatus.OK)
@@ -144,7 +152,7 @@ class MauMauWebHandler(BaseHTTPRequestHandler):
 
         # Kubernetes Health Check Endpoints
         if path in ("/health", "/api/health", "/healthz", "/readiness"):
-            self._send_json({"status": "ok", "app": "mau-mau-web", "version": "1.0.0"})
+            self._send_json({"status": "ok", "app": "mau-mau-web", "version": "1.0.0", "web_dir": str(WEB_DIR)})
             return
 
         if path == "/api/languages":
@@ -392,7 +400,7 @@ class MauMauWebHandler(BaseHTTPRequestHandler):
 def main() -> None:
     port = int(os.environ.get("PORT", "8000"))
     server = HTTPServer(("0.0.0.0", port), MauMauWebHandler)
-    print(f"Mau-Mau Web Server listening on http://localhost:{port} (Kubernetes ready)")
+    print(f"Mau-Mau Web Server listening on http://localhost:{port} (Web Dir: {WEB_DIR})")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
