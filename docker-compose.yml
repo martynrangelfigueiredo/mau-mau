@@ -29,7 +29,7 @@ services:
     command: ["python3", "-m", "maumau.cli"]
 
   mariadb:
-    image: mariadb:11.2-noble
+    image: mariadb:11.2
     container_name: maumau-mariadb
     environment:
       MARIADB_ROOT_PASSWORD: root_secure_password
