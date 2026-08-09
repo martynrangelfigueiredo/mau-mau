@@ -1,19 +1,3 @@
-# Mau-Mau Card Game - Game logic
-# Copyright (C) 2024  mau-mau contributors
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 from __future__ import annotations
 
 from typing import Optional
@@ -67,7 +51,7 @@ class GameState:
         # Flip first card (re-draw if it's a power card)
         first_card = self.deck.draw(1)[0]
         while first_card.rank in (DRAW_TWO_RANK, WILD_RANK):
-            self.deck._cards.insert(0, first_card)
+            self.deck.add_to_bottom(first_card)
             first_card = self.deck.draw(1)[0]
         self.discard_pile.append(first_card)
 
@@ -79,11 +63,13 @@ class GameState:
     def current_player(self) -> Player:
         return self.players[self.current_player_index]
 
-    def next_player_index(self) -> int:
-        return (self.current_player_index + self.direction) % len(self.players)
-
     def advance_turn(self) -> None:
-        self.current_player_index = self.next_player_index()
+        """Advance to the next player's turn, taking skips into account."""
+        steps = 2 if self.skip_next else 1
+        self.skip_next = False
+        self.current_player_index = (
+            self.current_player_index + (self.direction * steps)
+        ) % len(self.players)
 
     def is_valid_play(self, card: Card) -> bool:
         """Return True if *card* can be played on the current top card."""
@@ -168,12 +154,12 @@ class GameState:
         winner.score += points
 
 
-def is_game_over(players: list[Player]) -> bool:
-    return any(p.score >= WINNING_SCORE for p in players)
-
-
 def game_winner(players: list[Player]) -> Optional[Player]:
     for p in players:
         if p.score >= WINNING_SCORE:
             return p
     return None
+
+
+def is_game_over(players: list[Player]) -> bool:
+    return game_winner(players) is not None
